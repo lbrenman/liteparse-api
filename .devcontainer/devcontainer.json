@@ -1,0 +1,29 @@
+{
+  "name": "LiteParse API",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": false
+    }
+  },
+  "postCreateCommand": "apt-get update && apt-get install -y libreoffice imagemagick && npm install && cp .env.example .env && mkdir -p /tmp/liteparse-uploads",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "LiteParse API",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "42crunch.vscode-openapi"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
