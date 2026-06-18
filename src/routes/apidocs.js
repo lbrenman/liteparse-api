@@ -1,12 +1,14 @@
-const express = require('express');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
-const path = require('path');
-const router = express.Router();
+import { Router } from 'express';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const spec = YAML.load(path.join(__dirname, '../../openapi.yaml'));
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const spec = YAML.load(join(__dirname, '../../openapi.yaml'));
+const router = Router();
 
 router.use('/', swaggerUi.serve);
 router.get('/', swaggerUi.setup(spec));
 
-module.exports = router;
+export default router;

@@ -1,57 +1,27 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import { LiteParse } from '@llamaindex/liteparse';
 
-// Lazily load liteparse so startup doesn't fail if not yet installed
-let liteparse;
-function getLiteparse() {
-  if (!liteparse) {
-    liteparse = require('@llamaindex/liteparse');
-  }
-  return liteparse;
-}
-
-/**
- * POST /parse
- *
- * Multipart form fields:
- *   file        (required) — document file (PDF, DOCX, PPTX, XLSX, images)
- *   format      (optional) — "text" | "json"  (default: "text")
- *   no_ocr      (optional) — "true" to disable OCR
- *   ocr_language (optional) — Tesseract language code, e.g. "eng" (default: "eng")
- *   max_pages   (optional) — integer max pages to parse (default: 1000)
- *   target_pages (optional) — page range string e.g. "1-5,10" (default: all)
- *   password    (optional) — password for encrypted PDFs
- */
-exports.parseDocument = async (req, res) => {
+export async function parseDocument(req, res) {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Use multipart/form-data with field name "file".' });
   }
 
   const filePath = req.file.path;
-
   try {
-    const { parsePdf } = getLiteparse();
-
     const format = (req.body.format || 'text').toLowerCase();
     if (!['text', 'json'].includes(format)) {
       return res.status(400).json({ error: 'format must be "text" or "json"' });
     }
 
-    const options = {
-      format,
-      ocr: req.body.no_ocr !== 'true',
+    const parser = new LiteParse({
+      ocrEnabled: req.body.no_ocr !== 'true',
       ocrLanguage: req.body.ocr_language || 'eng',
       maxPages: req.body.max_pages ? parseInt(req.body.max_pages) : 1000,
-    };
+      ...(req.body.target_pages && { targetPages: req.body.target_pages }),
+      ...(req.body.password && { password: req.body.password }),
+    });
 
-    if (req.body.target_pages) {
-      options.targetPages = req.body.target_pages;
-    }
-    if (req.body.password) {
-      options.password = req.body.password;
-    }
-
-    const result = await parsePdf(filePath, options);
+    const result = await parser.parse(filePath);
 
     return res.json({
       data: {
@@ -59,57 +29,37 @@ exports.parseDocument = async (req, res) => {
         mimetype: req.file.mimetype,
         size_bytes: req.file.size,
         format,
-        result,
+        result: format === 'text' ? result.text : result,
       },
     });
   } catch (err) {
     console.error('Parse error:', err);
     return res.status(500).json({ error: err.message || 'Failed to parse document' });
   } finally {
-    // Always clean up the temp file
     fs.unlink(filePath, () => {});
   }
-};
+}
 
-/**
- * POST /parse/screenshot
- *
- * Multipart form fields:
- *   file         (required) — PDF file
- *   target_pages (optional) — page range string e.g. "1,3,5" or "1-5" (default: all)
- *   dpi          (optional) — rendering DPI (default: 150)
- *   password     (optional) — password for encrypted PDFs
- *
- * Returns an array of base64-encoded PNG images, one per page.
- */
-exports.screenshotDocument = async (req, res) => {
+export async function screenshotDocument(req, res) {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded. Use multipart/form-data with field name "file".' });
   }
 
   const filePath = req.file.path;
-
   try {
-    const { screenshotPdf } = getLiteparse();
-
-    const options = {
+    const parser = new LiteParse({
       dpi: req.body.dpi ? parseInt(req.body.dpi) : 150,
-    };
+      ...(req.body.target_pages && { targetPages: req.body.target_pages }),
+      ...(req.body.password && { password: req.body.password }),
+    });
 
-    if (req.body.target_pages) {
-      options.targetPages = req.body.target_pages;
-    }
-    if (req.body.password) {
-      options.password = req.body.password;
-    }
-
-    const screenshots = await screenshotPdf(filePath, options);
-
-    // screenshots is an array of Buffer objects (PNG images)
-    const pages = screenshots.map((buf, i) => ({
-      page: i + 1,
+    const screenshots = parser.screenshot(filePath);
+    const pages = screenshots.map((s) => ({
+      page: s.pageNum,
+      width: s.width,
+      height: s.height,
       format: 'png',
-      data: Buffer.isBuffer(buf) ? buf.toString('base64') : buf,
+      data: s.imageBuffer.toString('base64'),
     }));
 
     return res.json({
@@ -125,4 +75,4 @@ exports.screenshotDocument = async (req, res) => {
   } finally {
     fs.unlink(filePath, () => {});
   }
-};
+}

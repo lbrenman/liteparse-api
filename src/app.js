@@ -1,13 +1,12 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
-
-const healthRouter = require('./routes/health');
-const apiDocsRouter = require('./routes/apidocs');
-const parseRouter = require('./routes/parse');
-const authMiddleware = require('./middleware/auth');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import healthRouter from './routes/health.js';
+import apiDocsRouter from './routes/apidocs.js';
+import parseRouter from './routes/parse.js';
+import authMiddleware from './middleware/auth.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -25,22 +24,14 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// Unauthenticated routes
 app.use('/health', healthRouter);
 app.use('/api-docs', apiDocsRouter);
-
-// Authenticated routes
 app.use('/parse', authMiddleware, parseRouter);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
-});
-
-// Error handler
+app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
-module.exports = app;
+export default app;

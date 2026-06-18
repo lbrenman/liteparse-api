@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# Install LibreOffice (for DOCX/PPTX/XLSX conversion) and ImageMagick (for images)
+# Install LibreOffice (DOCX/PPTX/XLSX conversion) and ImageMagick (image conversion)
 RUN apt-get update && apt-get install -y \
     libreoffice \
     imagemagick \
@@ -13,7 +13,6 @@ RUN npm ci --omit=dev
 
 COPY . .
 
-# Ensure upload temp dir exists
 RUN mkdir -p /tmp/liteparse-uploads
 
 EXPOSE 3000

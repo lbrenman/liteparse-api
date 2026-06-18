@@ -12,53 +12,78 @@ LiteParse is a fast, open-source document parser built on PDFium + Tesseract OCR
 
 **Endpoints:**
 - `POST /parse` — extract text or structured JSON (with bounding boxes) from a document
-- `POST /parse/screenshot` — generate base64-encoded PNG screenshots per page (great for LLM vision)
+- `POST /parse/screenshot` — generate base64-encoded PNG screenshots per page (useful for LLM vision)
 - `GET /health` — health check (no auth)
 - `GET /api-docs` — Swagger UI (no auth)
 
 ## Prerequisites
 
 - Node.js 20+
-- LibreOffice — required for DOCX/PPTX/XLSX → PDF conversion (`apt-get install libreoffice`)
-- ImageMagick — required for image → PDF conversion (`apt-get install imagemagick`)
+- LibreOffice — required for DOCX/PPTX/XLSX → PDF conversion
+- ImageMagick — required for image → PDF conversion
 
-> In Codespaces, both are installed automatically by `postCreateCommand`.
+> In Codespaces, both are installed automatically by `postCreateCommand` in `.devcontainer/devcontainer.json`.
 
 ## Quick Start
 
 ### Option A — Codespaces (recommended)
 
 1. Click the **Open in GitHub Codespaces** badge above
-2. Wait for setup to complete — it automatically installs Node deps, LibreOffice, ImageMagick, and copies `.env.example` → `.env`
+2. Wait for setup — `postCreateCommand` automatically runs:
+   - `sudo apt-get update && sudo apt-get install -y libreoffice imagemagick`
+   - `npm install`
+   - Copies `.env.example` → `.env`
+   - Creates `/tmp/liteparse-uploads/`
 3. Open a terminal and run:
    ```bash
    npm run dev
    ```
-4. Browse API docs at `http://localhost:3000/api-docs`
-5. Set your API key in `.env` (default is `changeme`)
+4. Browse to `http://localhost:3000/api-docs` for the Swagger UI
+5. Edit `.env` to set a strong `API_KEY` (default is `changeme`)
 
-### Option B — Local
+> **Note:** If you open the Codespace and `postCreateCommand` has not yet finished, wait for it to complete before running `npm run dev`.
+
+### Option B — Local (Ubuntu/Debian)
 
 ```bash
-# Install system deps (Ubuntu/Debian)
-sudo apt-get install libreoffice imagemagick
+# Install system dependencies
+sudo apt-get update && sudo apt-get install -y libreoffice imagemagick
 
-# Or on macOS
-brew install --cask libreoffice
-brew install imagemagick
-
-# Install Node deps
+# Install Node dependencies
 npm install
 
-# Configure env
+# Configure environment
 cp .env.example .env
 # Edit .env and set API_KEY
+
+# Create upload temp directory
+mkdir -p /tmp/liteparse-uploads
 
 # Start
 npm run dev
 ```
 
-### Option C — Docker
+### Option C — Local (macOS)
+
+```bash
+# Install system dependencies
+brew install --cask libreoffice
+brew install imagemagick
+
+# Install Node dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+
+# Create upload temp directory
+mkdir -p /tmp/liteparse-uploads
+
+# Start
+npm run dev
+```
+
+### Option D — Docker
 
 ```bash
 cp .env.example .env
@@ -66,6 +91,20 @@ cp .env.example .env
 
 docker compose -f docker-compose.full.yml up --build
 ```
+
+The Dockerfile installs LibreOffice and ImageMagick automatically.
+
+## Troubleshooting: LibreOffice Install in Codespaces
+
+The Codespace base image (`javascript-node:20`) uses a minimal Debian mirror that may not have `libreoffice` available without first running `apt-get update`. If you get `E: Unable to locate package libreoffice`, run:
+
+```bash
+sudo apt-get update && sudo apt-get install -y libreoffice imagemagick
+```
+
+This is handled automatically by `postCreateCommand` on first Codespace creation, but if you're setting up manually or the postCreate step failed, run it yourself.
+
+> LibreOffice is a large package (~300MB). Installation takes 2–3 minutes in Codespaces.
 
 ## Environment Variables
 
@@ -81,7 +120,7 @@ docker compose -f docker-compose.full.yml up --build
 
 ## Authentication
 
-All `/parse` endpoints require an API key:
+All `/parse` endpoints require an API key header:
 
 ```
 x-api-key: your-api-key-here
@@ -148,7 +187,7 @@ curl -X POST http://localhost:3000/parse \
   -F "no_ocr=true"
 ```
 
-### Parse a DOCX file
+### Parse a DOCX file (requires LibreOffice)
 
 ```bash
 curl -X POST http://localhost:3000/parse \
@@ -166,15 +205,15 @@ curl -X POST http://localhost:3000/parse/screenshot \
   -F "dpi=200"
 ```
 
-Response includes base64-encoded PNG per page:
+Response:
 ```json
 {
   "data": {
     "filename": "document.pdf",
     "page_count": 3,
     "pages": [
-      { "page": 1, "format": "png", "data": "iVBORw0KGgo..." },
-      { "page": 2, "format": "png", "data": "iVBORw0KGgo..." }
+      { "page": 1, "width": 1224, "height": 1584, "format": "png", "data": "iVBORw0KGgo..." },
+      { "page": 2, "width": 1224, "height": 1584, "format": "png", "data": "iVBORw0KGgo..." }
     ]
   }
 }
@@ -187,7 +226,7 @@ Response includes base64-encoded PNG per page:
 | `file` | file | Yes | — | Document to parse |
 | `format` | string | No | `text` | `text` or `json` |
 | `no_ocr` | string | No | `false` | Set `true` to disable OCR |
-| `ocr_language` | string | No | `eng` | Tesseract language code |
+| `ocr_language` | string | No | `eng` | Tesseract language code (e.g. `fra`, `deu`) |
 | `max_pages` | integer | No | `1000` | Max pages to parse |
 | `target_pages` | string | No | all | Page range e.g. `1-5,10` |
 | `password` | string | No | — | Password for encrypted PDFs |
@@ -201,13 +240,41 @@ Response includes base64-encoded PNG per page:
 | `dpi` | integer | No | `150` | Rendering DPI |
 | `password` | string | No | — | Password for encrypted PDFs |
 
-## Notes on Office Documents
+## Project Structure
 
-DOCX, PPTX, and XLSX files are first converted to PDF via LibreOffice before parsing. Make sure LibreOffice is installed. In Codespaces it's installed automatically.
+```
+liteparse-api/
+├── .devcontainer/
+│   └── devcontainer.json      # Codespaces config — installs LibreOffice + ImageMagick
+├── src/
+│   ├── index.js               # Entry point
+│   ├── app.js                 # Express app setup
+│   ├── routes/
+│   │   ├── health.js          # GET /health
+│   │   ├── apidocs.js         # GET /api-docs (Swagger UI)
+│   │   └── parse.js           # POST /parse, POST /parse/screenshot
+│   ├── controllers/
+│   │   └── parse.js           # LiteParse integration logic
+│   └── middleware/
+│       └── auth.js            # API key auth
+├── openapi.yaml               # OpenAPI 3.0 spec
+├── Dockerfile                 # Includes LibreOffice + ImageMagick
+├── docker-compose.full.yml    # Full stack for local Docker use
+├── .env.example
+├── .gitignore
+├── package.json               # type: "module" (ESM) — required by @llamaindex/liteparse
+└── README.md
+```
+
+## Notes
+
+**ESM only:** The `@llamaindex/liteparse` package is ESM-only (`"type": "module"`). This project is configured accordingly — all source files use `import`/`export` syntax.
+
+**Tesseract is bundled:** OCR works out of the box with no extra setup. LibreOffice and ImageMagick are only needed for non-PDF input formats.
 
 ## Development
 
 ```bash
-npm run dev     # Start with nodemon (auto-restart on file changes)
-npm start       # Start without nodemon
+npm run dev    # Start with nodemon (auto-restart on changes)
+npm start      # Start without nodemon
 ```

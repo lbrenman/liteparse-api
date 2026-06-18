@@ -6,7 +6,7 @@
       "moby": false
     }
   },
-  "postCreateCommand": "apt-get update && apt-get install -y libreoffice imagemagick && npm install && cp .env.example .env && mkdir -p /tmp/liteparse-uploads",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y libreoffice imagemagick && npm install && cp .env.example .env && mkdir -p /tmp/liteparse-uploads",
   "forwardPorts": [3000],
   "portsAttributes": {
     "3000": {
