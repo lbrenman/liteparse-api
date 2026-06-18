@@ -1,4 +1,3 @@
-cat > src/controllers/parse.js << 'EOF'
 const fs = require('fs');
 const { LiteParse } = require('@llamaindex/liteparse');
 
@@ -80,4 +79,3 @@ exports.screenshotDocument = async (req, res) => {
     fs.unlink(filePath, () => {});
   }
 };
-EOF
