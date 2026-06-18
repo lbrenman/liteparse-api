@@ -22,6 +22,7 @@ export async function parseDocument(req, res) {
     });
 
     const result = await parser.parse(filePath);
+    fs.unlink(filePath, () => {});
 
     return res.json({
       data: {
@@ -33,10 +34,9 @@ export async function parseDocument(req, res) {
       },
     });
   } catch (err) {
+    fs.unlink(filePath, () => {});
     console.error('Parse error:', err);
     return res.status(500).json({ error: err.message || 'Failed to parse document' });
-  } finally {
-    fs.unlink(filePath, () => {});
   }
 }
 
@@ -49,17 +49,21 @@ export async function screenshotDocument(req, res) {
   try {
     const parser = new LiteParse({
       dpi: req.body.dpi ? parseInt(req.body.dpi) : 150,
-      ...(req.body.target_pages && { targetPages: req.body.target_pages }),
       ...(req.body.password && { password: req.body.password }),
+      ...(req.body.target_pages && { targetPages: req.body.target_pages }),
     });
 
-    const screenshots = parser.screenshot(filePath);
-    const pages = screenshots.map((s) => ({
+    // screenshot() returns a Promise that resolves to an array-like object
+    const screenshots = await parser.screenshot(filePath);
+    fs.unlink(filePath, () => {});
+
+    const arr = Array.isArray(screenshots) ? screenshots : [screenshots];
+    const pages = arr.map((s) => ({
       page: s.pageNum,
       width: s.width,
       height: s.height,
       format: 'png',
-      data: s.imageBuffer.toString('base64'),
+      data: Buffer.from(s.imageBuffer).toString('base64'),
     }));
 
     return res.json({
@@ -70,9 +74,8 @@ export async function screenshotDocument(req, res) {
       },
     });
   } catch (err) {
+    fs.unlink(filePath, () => {});
     console.error('Screenshot error:', err);
     return res.status(500).json({ error: err.message || 'Failed to generate screenshots' });
-  } finally {
-    fs.unlink(filePath, () => {});
   }
 }

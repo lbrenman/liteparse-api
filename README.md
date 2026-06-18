@@ -41,7 +41,7 @@ LiteParse is a fast, open-source document parser built on PDFium + Tesseract OCR
 4. Browse to `http://localhost:3000/api-docs` for the Swagger UI
 5. Edit `.env` to set a strong `API_KEY` (default is `changeme`)
 
-> **Note:** If you open the Codespace and `postCreateCommand` has not yet finished, wait for it to complete before running `npm run dev`.
+> **Note:** `postCreateCommand` installs LibreOffice (~300MB) which takes 2–3 minutes. Wait for it to finish before running `npm run dev`.
 
 ### Option B — Local (Ubuntu/Debian)
 
@@ -96,15 +96,15 @@ The Dockerfile installs LibreOffice and ImageMagick automatically.
 
 ## Troubleshooting: LibreOffice Install in Codespaces
 
-The Codespace base image (`javascript-node:20`) uses a minimal Debian mirror that may not have `libreoffice` available without first running `apt-get update`. If you get `E: Unable to locate package libreoffice`, run:
+If you open a Codespace manually (not via the badge) or the `postCreateCommand` step failed, you may need to install LibreOffice yourself:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y libreoffice imagemagick
 ```
 
-This is handled automatically by `postCreateCommand` on first Codespace creation, but if you're setting up manually or the postCreate step failed, run it yourself.
+If you get `E: Unable to locate package libreoffice`, it means `apt-get update` hasn't been run yet — the `sudo apt-get update &&` prefix is required. Running just `sudo apt-get install libreoffice` without updating first will fail.
 
-> LibreOffice is a large package (~300MB). Installation takes 2–3 minutes in Codespaces.
+> LibreOffice is only needed for DOCX/PPTX/XLSX input. PDF parsing works without it.
 
 ## Environment Variables
 
@@ -210,10 +210,15 @@ Response:
 {
   "data": {
     "filename": "document.pdf",
-    "page_count": 3,
+    "page_count": 1,
     "pages": [
-      { "page": 1, "width": 1224, "height": 1584, "format": "png", "data": "iVBORw0KGgo..." },
-      { "page": 2, "width": 1224, "height": 1584, "format": "png", "data": "iVBORw0KGgo..." }
+      {
+        "page": 1,
+        "width": 1224,
+        "height": 1584,
+        "format": "png",
+        "data": "iVBORw0KGgo..."
+      }
     ]
   }
 }
@@ -236,16 +241,26 @@ Response:
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `file` | file | Yes | — | PDF to screenshot |
-| `target_pages` | string | No | all | Pages e.g. `1,3,5` |
+| `target_pages` | string | No | all | Pages e.g. `1-3,5` |
 | `dpi` | integer | No | `150` | Rendering DPI |
 | `password` | string | No | — | Password for encrypted PDFs |
+
+## Implementation Notes
+
+**ESM only:** The `@llamaindex/liteparse` package is ESM-only. This project uses `"type": "module"` in `package.json` and all source files use `import`/`export` syntax.
+
+**`screenshot()` is async:** Despite the Node.js README showing it without `await`, `screenshot()` returns a Promise. Always `await` it.
+
+**Tesseract is bundled:** OCR works out of the box. LibreOffice and ImageMagick are only needed for non-PDF input formats.
+
+**Upload temp dir:** Multer writes uploads to `/tmp/liteparse-uploads/`. This directory must exist before starting the server. The `postCreateCommand` and setup instructions above create it automatically.
 
 ## Project Structure
 
 ```
 liteparse-api/
 ├── .devcontainer/
-│   └── devcontainer.json      # Codespaces config — installs LibreOffice + ImageMagick
+│   └── devcontainer.json      # Codespaces config
 ├── src/
 │   ├── index.js               # Entry point
 │   ├── app.js                 # Express app setup
@@ -254,23 +269,17 @@ liteparse-api/
 │   │   ├── apidocs.js         # GET /api-docs (Swagger UI)
 │   │   └── parse.js           # POST /parse, POST /parse/screenshot
 │   ├── controllers/
-│   │   └── parse.js           # LiteParse integration logic
+│   │   └── parse.js           # LiteParse integration
 │   └── middleware/
 │       └── auth.js            # API key auth
 ├── openapi.yaml               # OpenAPI 3.0 spec
-├── Dockerfile                 # Includes LibreOffice + ImageMagick
-├── docker-compose.full.yml    # Full stack for local Docker use
+├── Dockerfile
+├── docker-compose.full.yml
 ├── .env.example
 ├── .gitignore
-├── package.json               # type: "module" (ESM) — required by @llamaindex/liteparse
+├── package.json
 └── README.md
 ```
-
-## Notes
-
-**ESM only:** The `@llamaindex/liteparse` package is ESM-only (`"type": "module"`). This project is configured accordingly — all source files use `import`/`export` syntax.
-
-**Tesseract is bundled:** OCR works out of the box with no extra setup. LibreOffice and ImageMagick are only needed for non-PDF input formats.
 
 ## Development
 
